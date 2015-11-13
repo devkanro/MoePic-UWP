@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace MoePic.Toolkit.Net
 {
@@ -28,30 +24,37 @@ namespace MoePic.Toolkit.Net
         /// <summary>
         /// 传输速度，单位为 byte/s。
         /// </summary>
-        public int Speed { get; internal set; }
+        public int Speed { get; private set; }
         /// <summary>
         /// 消耗时间，单位为 ms。    
         /// </summary>
-        public int Time { get; internal set; }
+        public int Time { get; private set; }
         /// <summary>
         /// 总消耗时间，单位为 ms。
         /// </summary>
-        public int TotalTime { get; internal set; }
+        public int TotalTime { get; private set; }
         /// <summary>
         /// 表示当前传属状态。
         /// </summary>
         public HttpRequestProgressType ProgressType { get; internal set; }
+
         internal void Update()
         {
             Time = (int)(DateTime.Now -_createTime).TotalMilliseconds - TotalTime;
             TotalTime = (int)(DateTime.Now - _createTime).TotalMilliseconds;
         }
-
         internal void Update(int readBytes)
         {
             Update();
             TransferBytes += readBytes;
-            Speed = (int)(1.0 * (readBytes / (Time / 1000)));
+            if (Time != 0)
+            {
+                Speed = (int)(1000.0 * (readBytes / Time));
+            }
+            else
+            {
+                Speed = -1;
+            }
         }
     }
 }

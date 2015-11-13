@@ -90,6 +90,7 @@
     <PlatformTarget>x86</PlatformTarget>
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <ErrorReport>prompt</ErrorReport>
+    <DocumentationFile>bin\x86\Debug\MoePic.Toolkit.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
     <PlatformTarget>x86</PlatformTarget>
@@ -107,17 +108,43 @@
     <None Include="project.json" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Helper\VisualTreeHelper.cs" />
+    <Compile Include="Media\Animation\Animation.cs" />
+    <Compile Include="Media\Animation\AnimationCollection.cs" />
+    <Compile Include="Media\Animation\AnimationUseKeyFrame.cs" />
+    <Compile Include="Media\Animation\CubicBezierEasingFunction.cs" />
+    <Compile Include="Media\Animation\EasingFunction.cs" />
+    <Compile Include="Media\Animation\ExpressionAnimation.cs" />
+    <Compile Include="Media\Animation\ExpressionKeyFrame.cs" />
+    <Compile Include="Media\Animation\IAnimation.cs" />
+    <Compile Include="Media\Animation\IKeyFrame.cs" />
+    <Compile Include="Media\Animation\KeyFrame.cs" />
+    <Compile Include="Media\Animation\KeyFrameCollection.cs" />
+    <Compile Include="Media\Animation\LinearEasingFunction.cs" />
+    <Compile Include="Media\Animation\Parameter.cs" />
+    <Compile Include="Media\Animation\ParameterCollection.cs" />
+    <Compile Include="Media\Animation\Parameters.cs" />
+    <Compile Include="Media\Animation\KeyFrameAnimations.cs" />
+    <Compile Include="Media\Animation\Storyboard.cs" />
+    <Compile Include="Media\Animation\ValueKeyFrame.cs" />
+    <Compile Include="Media\HSBColor.cs" />
     <Compile Include="EventArgs.cs" />
-    <Compile Include="Net\Delegate.HttpWebRequestHandler.cs" />
+    <Compile Include="Exceptions\ToolkitInternalException.cs" />
+    <Compile Include="Net\HttpWebRequestHandler.cs" />
     <Compile Include="Net\Enum.cs" />
     <Compile Include="Net\HttpRequest.cs" />
     <Compile Include="Net\HttpRequestStats.cs" />
     <Compile Include="NotifyPropertyObject.cs" />
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Data\UniversalIncrementalLoadingProvider.cs" />
+    <Compile Include="Data\IncrementalLoadingProvider.cs" />
+    <Compile Include="Data\IncrementalLoadingService.cs" />
     <Content Include="Properties\MoePic.Toolkit.rd.xml" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Media\Effects\" />
+  </ItemGroup>
   <PropertyGroup Condition=" '$(VisualStudioVersion)' == '' or '$(VisualStudioVersion)' &lt; '14.0' ">
     <VisualStudioVersion>14.0</VisualStudioVersion>
   </PropertyGroup>

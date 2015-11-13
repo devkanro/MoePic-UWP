@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
+﻿using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 using MoePic.Toolkit.Annotations;
 
 namespace MoePic.Toolkit
@@ -38,6 +33,7 @@ namespace MoePic.Toolkit
         /// 引发<see cref="PropertyChanged"/>事件。
         /// </summary>
         /// <param name="propertyName">将要发生变更的属性名，为<c>null</c>将自动采用调用方名。</param>
+        [NotifyPropertyChangedInvocator]
         protected virtual void OnPropertyChanging([CallerMemberName] string propertyName = null)
         {
             PropertyChanging?.Invoke(this, new PropertyChangingEventArgs(propertyName));
@@ -53,7 +49,7 @@ namespace MoePic.Toolkit
         {
             PropertyInfo propertyInfo = this.GetType().GetProperty(propertyName);
             T oldValue = (T) propertyInfo.GetValue(this);
-            if (Object.Equals(oldValue,value))
+            if (!Equals(oldValue,value))
             {
                 OnPropertyChanging(propertyName);
                 propertyInfo.SetValue(this,value);

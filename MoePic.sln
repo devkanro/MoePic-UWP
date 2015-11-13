@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MoePic.Moebooru", "MoePic.M
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MoePic.Toolkit", "MoePic.Toolkit\MoePic.Toolkit.csproj", "{ED32A5EC-5C11-40B5-949F-9FE9560196BD}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Server", "Server", "{89A5718D-09D3-4A9C-8608-E33FF106811C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Client", "Client", "{7090B8D6-9242-4C40-8D10-70D936F59B1B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -76,5 +80,10 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{28771503-D615-4561-ACF6-DFC77B7AD8D8} = {7090B8D6-9242-4C40-8D10-70D936F59B1B}
+		{CB7DA9B5-DFF4-49BB-8E73-37648913290A} = {7090B8D6-9242-4C40-8D10-70D936F59B1B}
+		{ED32A5EC-5C11-40B5-949F-9FE9560196BD} = {7090B8D6-9242-4C40-8D10-70D936F59B1B}
 	EndGlobalSection
 EndGlobal

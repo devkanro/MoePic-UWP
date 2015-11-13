@@ -1,20 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
+
 using MoePic.Toolkit.Annotations;
-using Buffer = Windows.Storage.Streams.Buffer;
+using MoePic.Toolkit.Exceptions;
 
 namespace MoePic.Toolkit.Net
 {
     /// <summary>
-    /// 表示正在进行的 HTTP 请求。
+    /// 表示一个 HTTP 请求，该类采用流式函数接口，请注意函数的先后顺序。
     /// </summary>
     public class HttpRequest : NotifyPropertyObject, IDisposable
     {
@@ -28,24 +28,35 @@ namespace MoePic.Toolkit.Net
         /// </summary>
         public static int DefaultRetryCount { get; set; } = 3;
 
+        /// <summary>
+        /// 以 Url 字符串构建一个 HTTP 请求。
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
         public static HttpRequest Create(String url)
         {
             return new HttpRequest(WebRequest.CreateHttp(url));
         }
 
+        /// <summary>
+        /// 以 Uri 构建一个 HTTP 请求。
+        /// </summary>
+        /// <param name="uri"></param>
+        /// <returns></returns>
         public static HttpRequest Create(Uri uri)
         {
             return new HttpRequest(WebRequest.CreateHttp(uri));
         }
 
-        private EventWaitHandle _progressWaitHandle = new EventWaitHandle(false, EventResetMode.ManualReset);
-        private bool _progressing = false;
+        private readonly EventWaitHandle _progressWaitHandle = new EventWaitHandle(false, EventResetMode.ManualReset);
+        private bool _progressing;
 
         private HttpRequestState _state;
         private HttpWebRequest _request;
         private HttpWebResponse _response;
         private Exception _exception;
-        private MemoryStream _result;
+        private Stream _resultStream;
+        private Stream _customStream;
 
         private HttpRequest(HttpWebRequest request)
         {
@@ -92,7 +103,7 @@ namespace MoePic.Toolkit.Net
             }
         }
         /// <summary>
-        /// 当出现异常时，所捕获的异常。
+        /// 当网络请求出现异常时，所捕获的异常。
         /// </summary>
         public Exception Exception
         {
@@ -107,13 +118,13 @@ namespace MoePic.Toolkit.Net
         /// <summary>
         /// HTTP 响应结果流。
         /// </summary>
-        public MemoryStream ResultStream
+        public Stream ResultStream
         {
-            get { return _result; }
+            get { return _customStream ?? _resultStream; }
             private set
             {
-                if (Equals(value, _result)) return;
-                _result = value;
+                if (Equals(value, _resultStream)) return;
+                _resultStream = value;
                 OnPropertyChanged();
             }
         }
@@ -143,7 +154,7 @@ namespace MoePic.Toolkit.Net
         /// </summary>
         /// <param name="header">Header 类型。</param>
         /// <param name="value">Header 值。</param>
-        public HttpRequest AddHeader([NotNull]HttpRequestHeader header, [NotNull]String value)
+        public HttpRequest AddHeader(HttpRequestHeader header, [NotNull]String value)
         {
             if (State != HttpRequestState.NothingSpecial)
             {
@@ -158,7 +169,7 @@ namespace MoePic.Toolkit.Net
         /// </summary>
         /// <param name="header">Header 类型。</param>
         /// <param name="value">Header 值。</param>
-        public HttpRequest AddHeader([NotNull]HttpResponseHeader header, [NotNull]String value)
+        public HttpRequest AddHeader(HttpResponseHeader header, [NotNull]String value)
         {
             if (State != HttpRequestState.NothingSpecial)
             {
@@ -201,7 +212,7 @@ namespace MoePic.Toolkit.Net
         }
 
         /// <summary>
-        /// 提供相应的处理器来处理该 HTTP 请求。
+        /// 提供相应的处理器来对该 HTTP 请求进行处理，例如添加凭证，Cookies，Header。
         /// </summary>
         /// <param name="handler"></param>
         /// <returns></returns>
@@ -216,6 +227,26 @@ namespace MoePic.Toolkit.Net
         }
 
         /// <summary>
+        /// 设置 HTTP 请求的结果流，HTTP 请求的结果将会保留在流中。请注意：请确保流可读可写，并且流的位置在预定的位置，而且流的长度足够或是为可拓展流，否则将可能返回错误的结果。
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <returns></returns>
+        public HttpRequest SetResultStream([NotNull]Stream stream)
+        {
+            if (!stream.CanWrite)
+            {
+                throw new ArgumentException("提供的流不可写。",nameof(stream));
+            }
+
+            OnPropertyChanging(nameof(ResultStream));
+            _resultStream?.Dispose();
+            _customStream = stream;
+            OnPropertyChanged(nameof(ResultStream));
+
+            return this;
+        }
+
+        /// <summary>
         /// 重新构造相同的 HTTP 请求，用于重复当前请求。
         /// </summary>
         public HttpRequest RebuildRequest()
@@ -224,8 +255,14 @@ namespace MoePic.Toolkit.Net
             {
                 throw new InvalidOperationException("不能对传输中的请求进行修改。");
             }
+            
             var oldRequest = Request;
             Request = WebRequest.CreateHttp(oldRequest.RequestUri);
+
+            if (Request == null)
+            {
+                throw new ToolkitInternalException($"无法从{oldRequest.RequestUri}创建 HTTP 请求。");
+            }
 
             Request?.Abort();
             ResultStream?.Dispose();
@@ -287,7 +324,7 @@ namespace MoePic.Toolkit.Net
         }
 
         /// <summary>
-        /// 使用指定的重试次数，Post 该请求。
+        /// 使用指定的重试次数，Get 该请求。
         /// </summary>
         public HttpRequest Get(int retryCount)
         {
@@ -301,29 +338,38 @@ namespace MoePic.Toolkit.Net
         }
 
         /// <summary>
-        /// 使用默认的重试次数，Get 该请求。
+        /// 使用默认的重试次数，Put 该请求。
         /// </summary>
-        public HttpRequest Put([CanBeNull]Stream content = null)
+        /// <param name="content">要 Put 的内容流</param>
+        /// <returns></returns>
+        public HttpRequest Put([NotNull]Stream content)
         {
             if (State != HttpRequestState.NothingSpecial)
             {
                 throw new InvalidOperationException("不能对已进行过的请求再次发起请求，请考虑用 HttpRequest.RebuildRequest 方法重构请求。");
             }
-            Put(DefaultRetryCount);
+            Put(DefaultRetryCount, content);
             return this;
         }
 
         /// <summary>
-        /// 使用指定的重试次数，Post 该请求。
+        /// 使用指定的重试次数，Put 该请求。
         /// </summary>
-        public HttpRequest Put(int retryCount, [CanBeNull]Stream content = null)
+        /// <param name="retryCount"></param>
+        /// <param name="content">要 Put 的内容流</param>
+        /// <returns></returns>
+        public HttpRequest Put(int retryCount, [NotNull]Stream content)
         {
             if (State != HttpRequestState.NothingSpecial)
             {
                 throw new InvalidOperationException("不能对已进行过的请求再次发起请求，请考虑用 HttpRequest.RebuildRequest 方法重构请求。");
             }
-            Request.Method = "GET";
-            Start(retryCount);
+            if (!content.CanRead)
+            {
+                throw new ArgumentException("内容流不可读。", nameof(content));
+            }
+            Request.Method = "PUT";
+            Start(retryCount, content);
             return this;
         }
 
@@ -336,143 +382,157 @@ namespace MoePic.Toolkit.Net
             return this;
         }
 
-        private void Start(int retryCount, [CanBeNull]Stream content = null)
+        private async void Start(int retryCount, [CanBeNull]Stream content = null)
         {
             _progressing = true;
-            Task<bool> task = Task.Run(async () =>
-            {
-                _progressWaitHandle.Reset();
-                int retry = 0;
-                RETRY:
 
-                if (State == HttpRequestState.NothingSpecial)
+            _progressWaitHandle.Reset();
+            int retry = 0;
+            RETRY: //重试标签
+
+            if (State == HttpRequestState.NothingSpecial)
+            {
+                EventArgs<HttpRequestStats> progressInfo = null;
+
+                if (TransferProgressChanged != null)
                 {
-                    EventArgs<HttpRequestStats> progressInfo = null;
-                    DateTime startTime = DateTime.Now;
+                    progressInfo = new EventArgs<HttpRequestStats>(new HttpRequestStats());
+                }
+
+                try
+                {
+                    State = HttpRequestState.Connecting;
 
                     if (TransferProgressChanged != null)
                     {
-                        progressInfo = new EventArgs<HttpRequestStats>(new HttpRequestStats());
+                        progressInfo.Value.Update();
+                        TransferProgressChanged(this, progressInfo);
                     }
 
-                    try
+                    //数据上传过程，用于 Put 与 Post
+                    if (content != null && (Request.Method == "PUT" || Request.Method == "POST"))
                     {
-                        State = HttpRequestState.Connecting;
-
-                        if (TransferProgressChanged != null)
+                        using (var requestStream = await Request.GetRequestStreamAsync())
                         {
-                            progressInfo.Value.Update();
-                            TransferProgressChanged(this, progressInfo);
-                        }
+                            State = HttpRequestState.Progressing;
 
-                        if (content != null && (Request.Method == "PUT" || Request.Method == "POST"))
-                        {
-                            using (var requestStream = await Request.GetRequestStreamAsync())
+                            if (TransferProgressChanged != null)
                             {
-                                State = HttpRequestState.Progressing;
+                                progressInfo.Value.ProgressType = HttpRequestProgressType.Upload;
+                                progressInfo.Value.Update();
+                                progressInfo.Value.TotalBytes = content.Length;
+                                TransferProgressChanged(this, progressInfo);
+                            }
 
+                            byte[] buffer = new byte[TransferBufferSize];
+                            int writeLength;
+
+                            while ((writeLength = content.Read(buffer, 0, buffer.Length)) != 0)
+                            {
+                                requestStream.Write(buffer, 0, writeLength);
                                 if (TransferProgressChanged != null)
                                 {
-                                    progressInfo.Value.ProgressType = HttpRequestProgressType.Upload;
-                                    progressInfo.Value.Update();
-                                    progressInfo.Value.TotalBytes = content.Length;
+                                    progressInfo.Value.Update(writeLength);
                                     TransferProgressChanged(this, progressInfo);
+                                }
+                            }
+
+                            if (TransferProgressChanged != null)
+                            {
+                                progressInfo = new EventArgs<HttpRequestStats>(new HttpRequestStats());
+                            }
+                        }
+                    }
+
+                    //数据下载过程，用于 Post 与 Get
+                    if (Request.Method == "GET" || Request.Method == "POST")
+                    {
+                        using (Response = (HttpWebResponse) await Request.GetResponseAsync())
+                        {
+                            using (var stream = Response.GetResponseStream())
+                            {
+                                if (TransferProgressChanged != null)
+                                {
+                                    progressInfo.Value.ProgressType = HttpRequestProgressType.Download;
+                                    State = HttpRequestState.Progressing;
+                                    progressInfo.Value.TotalBytes = Response.ContentLength > 0
+                                        ? Response.ContentLength
+                                        : 10*TransferBufferSize;
                                 }
 
                                 byte[] buffer = new byte[TransferBufferSize];
-                                int writeLength = 0;
-
-                                while ((writeLength = content.Read(buffer, 0, buffer.Length)) != 0)
+                                if (_customStream == null)
                                 {
-                                    requestStream.Write(buffer, 0, writeLength);
+                                    ResultStream =
+                                        new MemoryStream((int) (Response.ContentLength > 0
+                                            ? Response.ContentLength
+                                            : 10*TransferBufferSize));
+                                }
+
+                                int readLength;
+                                int totalLength = 0;
+                                while ((readLength = stream.Read(buffer, 0, buffer.Length)) != 0)
+                                {
+                                    totalLength += readLength;
+                                    ResultStream.Write(buffer, 0, readLength);
                                     if (TransferProgressChanged != null)
                                     {
-                                        progressInfo.Value.Update(writeLength);
+                                        progressInfo.Value.Update(readLength);
                                         TransferProgressChanged(this, progressInfo);
                                     }
                                 }
 
-                                if (TransferProgressChanged != null)
+                                if (ResultStream.CanSeek)
                                 {
-                                    progressInfo = new EventArgs<HttpRequestStats>(new HttpRequestStats());
+                                    ResultStream.Seek(-totalLength, SeekOrigin.Current);
                                 }
                             }
                         }
-
-                        if (Request.Method == "GET" || Request.Method == "POST")
-                        {
-                            using (Response = (HttpWebResponse)await Request.GetResponseAsync())
-                            {
-                                using (var stream = Response.GetResponseStream())
-                                {
-                                    if (TransferProgressChanged != null)
-                                    {
-                                        progressInfo.Value.ProgressType = HttpRequestProgressType.Download;
-                                        State = HttpRequestState.Progressing;
-                                        progressInfo.Value.TotalBytes = Response.ContentLength > 0 ? Response.ContentLength : 10 * TransferBufferSize;
-                                    }
-
-                                    byte[] buffer = new byte[TransferBufferSize];
-                                    ResultStream =
-                                        new MemoryStream((int)(Response.ContentLength > 0
-                                            ? Response.ContentLength
-                                            : 10 * TransferBufferSize));
-
-                                    int readLength = 0;
-                                    while ((readLength = stream.Read(buffer, 0, buffer.Length)) != 0)
-                                    {
-                                        ResultStream.Write(buffer, 0, readLength);
-                                        if (TransferProgressChanged != null)
-                                        {
-                                            progressInfo.Value.Update(readLength);
-                                            TransferProgressChanged(this, progressInfo);
-                                        }
-                                    }
-
-                                    ResultStream.Seek(0, SeekOrigin.Begin);
-                                    //ResultStream.SetLength(progressInfo.Value.TotalBytes);
-                                }
-                            }
-                        }
-
-                        State = HttpRequestState.Completed;
-                        if (TransferProgressChanged != null)
-                        {
-                            progressInfo.Value.Update();
-                            TransferProgressChanged(this, progressInfo);
-                        }
-                        _progressWaitHandle.Set();
-                        _progressing = false;
-                        return true;
                     }
-                    catch (WebException webException)
+
+                    State = HttpRequestState.Completed;
+                    if (TransferProgressChanged != null)
                     {
-                        Exception = webException;
-                        State = HttpRequestState.ErrorOccurred;
-                        if (TransferProgressChanged != null)
-                        {
-                            progressInfo.Value.Update();
-                            TransferProgressChanged(this, progressInfo);
-                        }
+                        progressInfo.Value.Update();
+                        TransferProgressChanged(this, progressInfo);
+                    }
+                    _progressWaitHandle.Set();
+                    _progressing = false;
+                }
+                catch (WebException webException)
+                {
+                    Exception = webException;
+                    State = HttpRequestState.ErrorOccurred;
+                    if (TransferProgressChanged != null)
+                    {
+                        progressInfo.Value.Update();
+                        TransferProgressChanged(this, progressInfo);
                     }
                 }
-
-                if (retry < retryCount)
+                catch (Exception)
                 {
-                    retry++;
-                    RebuildRequest();
+                    _progressWaitHandle.Set();
+                    _progressing = false;
 
-                    goto RETRY;
+                    throw;
                 }
+            }
 
-                _progressWaitHandle.Set();
-                _progressing = false;
-                return false;
-            });
+            if (retry < retryCount)
+            {
+                retry++;
+                RebuildRequest(); //重构请求
+
+                goto RETRY; //重试请求
+            }
+
+            //取消等待
+            _progressWaitHandle.Set();
+            _progressing = false;
         }
 
         /// <summary>
-        /// 异步等待一个传输过程。
+        /// 异步等待 HTTP 请求传输过程。
         /// </summary>
         public async Task<HttpRequest> Wait()
         {
@@ -498,7 +558,7 @@ namespace MoePic.Toolkit.Net
         }
 
         /// <summary>
-        /// 将 HTTP 请求结果以 UTF-8 编码转换为字符串。
+        /// 将 HTTP 请求结果以 UTF-8 编码转换为字符串，并在结束后释放该次网络请求的资源，在该操作后<see cref="ResultStream"/>与<see cref="Response"/>不再有效。
         /// </summary>
         public String GetDataAsString()
         {
@@ -506,12 +566,17 @@ namespace MoePic.Toolkit.Net
         }
 
         /// <summary>
-        /// 将 HTTP 请求结果以指定的代码页转换为字符串。
+        /// 将 HTTP 请求结果以指定的代码页转换为字符串，并在结束后释放该次网络请求的资源，在该操作后内部的<see cref="ResultStream"/>与<see cref="Response"/>不再有效，但不会释放<see cref="SetResultStream"/>所设置的流。
         /// </summary>
         public String GetDataAsString([NotNull]Encoding encoding)
         {
             if (State == HttpRequestState.Completed)
             {
+                if (!ResultStream.CanRead)
+                {
+                    throw new ArgumentException("结果流不可读。", nameof(ResultStream));
+                }
+
                 if (ResultStream != null && ResultStream.Length > 0)
                 {
                     byte[] data = new byte[ResultStream.Length];
@@ -530,10 +595,18 @@ namespace MoePic.Toolkit.Net
             }
         }
 
+        /// <summary>
+        /// 将 HTTP 请求结果转换为<see cref="ImageSource"/>，并在结束后释放该次网络请求的资源，在该操作后内部的<see cref="ResultStream"/>与<see cref="Response"/>不再有效，但不会释放<see cref="SetResultStream"/>所设置的流。
+        /// </summary>
         public async Task<ImageSource> GetDateAsImage()
         {
             if (State == HttpRequestState.Completed)
             {
+                if (!ResultStream.CanRead)
+                {
+                    throw new ArgumentException("结果流不可读。", nameof(ResultStream));
+                }
+
                 if (ResultStream != null && ResultStream.Length > 0)
                 {
 
@@ -553,10 +626,16 @@ namespace MoePic.Toolkit.Net
             }
         }
 
+        /// <summary>
+        /// 释放该次网络请求的资源，在该操作后内部的<see cref="ResultStream"/>与<see cref="Response"/>不再有效，但不会释放<see cref="SetResultStream"/>所设置的流。
+        /// </summary>
         public void Dispose()
         {
             Request?.Abort();
-            ((IDisposable)ResultStream)?.Dispose();
+            if (_customStream == null)
+            {
+                ((IDisposable)ResultStream)?.Dispose();
+            }
         }
     }
 }

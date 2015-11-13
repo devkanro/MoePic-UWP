@@ -5,11 +5,25 @@
     xmlns:local="using:MoePic"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:anime="using:MoePic.Toolkit.Media.Animation"
     mc:Ignorable="d">
-
+    <Page.Resources>
+        <anime:Storyboard x:Key="Storyboard">
+            <anime:Vector3AnimationUseKeyFrame Property="Offset" TargetName="Button">
+                <anime:Vector3AnimationUseKeyFrame.Parameters>
+                    <anime:Vector3Parameter Name="delta" Value="100,100,100"/>
+                </anime:Vector3AnimationUseKeyFrame.Parameters>
+                <anime:ExpressionKeyFrame Expression="this.StartingValue + delta" Progress="1.0">
+                    <anime:ExpressionKeyFrame.EasingFunction>
+                        <anime:CubicBezierEasingFunction ControlPoint1="0.5,0" ControlPoint2="1,1"/>
+                    </anime:ExpressionKeyFrame.EasingFunction>
+                </anime:ExpressionKeyFrame>
+            </anime:Vector3AnimationUseKeyFrame>
+        </anime:Storyboard>
+    </Page.Resources>
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Image x:Name="Image"></Image>
+        <Image x:Name="Image" UseLayoutRounding="True"></Image>
         <ProgressBar x:Name="ProgressBar" VerticalAlignment="Bottom"></ProgressBar>
-        <Button Content="Click Me" Click="Button_Click"/>
+        <Button x:Name="Button" Content="Click Me" Click="Button_Click"/>
     </Grid>
 </Page>
